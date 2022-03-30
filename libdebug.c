@@ -174,7 +174,7 @@ static int build_l4_packet(int proto, void *l4, void *param, struct iphdr *iph)
 		uh = l4;
 		uh->source 	= htons(sport++);
 		uh->dest 	= htons(dport);
-		uh->len 		= htons(l4_head_len);
+		uh->len 	= htons(l4_head_len + l4_data_len);
 		uh->check 	= 0;
 		if(l4_data_len){
 			l4_data = l4 + l4_head_len;
@@ -190,6 +190,7 @@ static int build_l4_packet(int proto, void *l4, void *param, struct iphdr *iph)
 	default:
 		return 0;
 	}
+
 	return l4_head_len + l4_data_len;
 }
 
