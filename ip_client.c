@@ -36,7 +36,8 @@ static void help(char *cmd)
 	printf("\t-z %-20sUDP data length (0 =< SIZE <= 1500)\n", "<NUMBER>");
 	printf("\t-p %-20sl4 protocol\n", "<NUMBER>");
 	printf("\t-c %-20scount\n", "<COUNT>");
-	printf("\t-m %-20smtu settings (default is 1500)\n", "");
+	printf("\t-m %-20smtu settings (default is 1500)\n", "<NUMBER>");
+	printf("\t-M %-20sMSS settings (0 means is 1460)\n", "<NUMBER>");
 	printf("\t-r %-20sread from peer\n", "");
 	printf("\t-d %-20sdebug switch\n", "");
 	printf("\t-h %-20sShow This\n", "");
@@ -53,7 +54,7 @@ int main (int argc, char **argv)
 	int opt, val = 1, count = 1, nsend = 0, proto = IPPROTO_TCP;
 	struct opt_value_s ov = {};
 
-	while ((opt = getopt(argc, argv, "H:l:D:s:z:p:c:m:rdh")) != -1) {
+	while ((opt = getopt(argc, argv, "H:l:D:s:z:p:c:m:M:rdh")) != -1) {
 		switch (opt) {
 		case 'H':
 			host = optarg;
@@ -95,6 +96,15 @@ int main (int argc, char **argv)
 			if(ov.mtu < 0){
 				printf("invalid param for '-m': %s\n", optarg);
 				help(argv[0]);
+			}
+			break;
+		case 'M':
+			ov.mss = atoi(optarg);
+			if(ov.mss < 0){
+				printf("invalid param for '-M': %s\n", optarg);
+				help(argv[0]);
+			} else if (!ov.mss) {
+				ov.mss = DEFAULT_MSS;;
 			}
 			break;
 		case 'r':

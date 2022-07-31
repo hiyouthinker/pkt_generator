@@ -22,6 +22,7 @@ typedef unsigned int u32;
 #endif
 
 #define DEFAULT_MTU 	1500
+#define DEFAULT_MSS		(DEFAULT_MTU - 20 - 20)
 #define MAX_PKT_LEN		1600
 
 struct packet_st {
@@ -52,6 +53,7 @@ struct opt_value_s{
 	__u16 window;	/* for TCP */
 	__u16 udp_size;
 	__u16 mtu;
+	__u16 mss;
 };
 
 #define MyCopyRight	"Copyright: Version 2.1 @BigBro/2022"

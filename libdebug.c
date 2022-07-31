@@ -163,7 +163,10 @@ static int build_l4_packet(int proto, void *l4, void *param, struct iphdr *iph)
 		th->window	= (ov && ov->window) ? htons(ov->window) : htons(65535);
 		th->check = 0;
 		th->urg_ptr = 0;
-		l4_head_len += build_tcp_options((__be32 *)(th + 1));
+
+		if (ov->mss)
+			l4_head_len += build_tcp_options((__be32 *)(th + 1));
+
 		/* The Length of TCP Header */
 		*(((__be16 *)th) + 6)	= htons((l4_head_len >> 2) << 12 | 0);
 		th->syn = 1;
