@@ -21,6 +21,15 @@ typedef unsigned int u32;
 #define IPPROTO_UDP 17
 #endif
 
+#define DEFAULT_MTU 	1500
+#define MAX_PKT_LEN		1600
+
+struct packet_st {
+	char data[MAX_PKT_LEN];
+	int len;
+	struct packet_st *next;
+};
+
 /* This is same as struct vlan_ethhdr in kernel */
 struct vlan_ethhdr_s {
 	unsigned char	h_dest[ETH_ALEN];
@@ -38,12 +47,14 @@ struct opt_value_s{
 	__u16 sport, dport, tag;
 	__u16 l3proto;
 	__u8 l4proto;
-	__u8 pcode;	/* Code of PPPoE */
-	__u8 psid;	/* SessionID of PPPoE */
+	__u8 pcode;		/* Code of PPPoE */
+	__u8 psid;		/* SessionID of PPPoE */
 	__u16 window;	/* for TCP */
+	__u16 udp_size;
+	__u16 mtu;
 };
 
-#define MyCopyRight	"Copyright: Version 2.0 @BigBro/2020"
+#define MyCopyRight	"Copyright: Version 2.1 @BigBro/2022"
 
 #define MySMAC 			0x0001
 #define MyDMAC 			0x0002
@@ -83,7 +94,7 @@ extern char *local_ip;
 						printf(x);\
 				}while(0)
 
-extern int build_ip_packet(void *l3, void *param, __u8 proto);
+extern int build_ip_packet(struct packet_st *packet, void *param);
 extern int is_tcpudp_packet(char *packet, int proto);
 extern unsigned short tcpudp_packet_port(char *packet, int dir);
 extern int set_tcp_keepalive(int fd, int keepalive);

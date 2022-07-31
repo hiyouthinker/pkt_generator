@@ -1,6 +1,6 @@
 /***************************
  * ICMP Client (RX/TX ICMP Packet)
- * 	Copyright: https://github.com/hiyouthinker @2018
+ * 	Copyright: https://github.com/hiyouthinker @2018 - 2022
  *
 ****************************/
 
@@ -16,13 +16,10 @@
 #include <stdarg.h>
 #include <assert.h>
 #include <netinet/in.h>
+#include <netinet/ip.h> /* for IP_MF etc. */
 #include <arpa/inet.h>
-#include <linux/ip.h>
 #include <linux/icmp.h>
 #include "libdebug.h"
-
-#define DEFAULT_MTU 1500
-#define IP_MF		0x2000		/* Flag: "More Fragments"	*/
 
 static unsigned short icmp_id = 0;
 
@@ -69,14 +66,16 @@ static int build_icmp_packet(int seq, char *buff, int data_len, int fd, struct s
 		while (1) {
 			/* offset MUST be 8 multiple */
 			iph->frag_off = htons(offset >> 3);
-			if(iph->ihl * 4 + ip_data_len - offset < DEFAULT_MTU){
+
+			if (iph->ihl * 4 + ip_data_len - offset < DEFAULT_MTU) {
 				packsize = iph->ihl * 4 + ip_data_len - offset;
+				/* sent the pkt after the function returns */
 				memcpy((char *)icmp, p, ip_data_len - offset);
 				break;
-			}
-			else{
+			} else {
 				iph->frag_off |= htons(IP_MF);
 			}
+
 			offset += delta;
 			/* IP Header */
 			memcpy(dt, (char *)iph, iph->ihl * 4);
@@ -88,7 +87,7 @@ static int build_icmp_packet(int seq, char *buff, int data_len, int fd, struct s
 			p += delta;
 			debug_out(DEBUG_LEVEL_DETAIL, "TX packet: %s.\n", bin_to_hex_string(dt, DEFAULT_MTU));
 			debug_out(DEBUG_LEVEL_INFO, "TX packet to 0x%04x, fd: %d.\n", si->sin_addr.s_addr, fd);
-			if (sendto(fd, dt, DEFAULT_MTU, 0, (struct sockaddr *)si, sizeof(struct sockaddr) ) < 0) {
+			if (sendto(fd, dt, DEFAULT_MTU, 0, (struct sockaddr *)si, sizeof(struct sockaddr)) < 0) {
 				debug_out(DEBUG_LEVEL_ERROR, "sendto failed (%m).\n");
 				continue;
 			}

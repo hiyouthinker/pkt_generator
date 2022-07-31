@@ -87,7 +87,7 @@ static struct name_value_s pppoe_code[] = {
 			{NULL, 0},
 	};
 
-static char MyPacket[2048];
+static struct packet_st MyPacket;
 
 static void help(void);
 
@@ -189,7 +189,8 @@ static int build_pppoed_packet(void *l3)
 
 static int build_raw_packet(struct opt_value_s *ov)
 {
-	struct ethhdr *eth = (struct ethhdr *)MyPacket;
+	char *packet = MyPacket.data;
+	struct ethhdr *eth = (struct ethhdr *)packet;
 	struct vlan_ethhdr_s *vhdr;
 	void *l3;
 	int tot_len = 0;
@@ -203,7 +204,7 @@ static int build_raw_packet(struct opt_value_s *ov)
 	memcpy(eth->h_source, opt_value.smac, ETH_ALEN);
 	
 	if(opt_value.opt & MyTag){
-		vhdr = (struct vlan_ethhdr_s *)MyPacket;
+		vhdr = (struct vlan_ethhdr_s *)packet;
 		vhdr->h_vlan_proto = htons(ETH_P_8021Q);
 		vhdr->h_vlan_TCI = htons(opt_value.tag);
 		vhdr->h_vlan_encapsulated_proto = htons(opt_value.l3proto);
@@ -213,7 +214,7 @@ static int build_raw_packet(struct opt_value_s *ov)
 		eth->h_proto = htons(opt_value.l3proto);
 		tot_len = sizeof(*eth);
 	}
-	l3 = MyPacket + tot_len;
+	l3 = packet + tot_len;
 	
 	switch(opt_value.l3proto){
 		case ETH_P_PPP_DISC:
@@ -227,12 +228,12 @@ static int build_raw_packet(struct opt_value_s *ov)
 				printf("Please input L4 Protocol & Src IP & Dest IP\n");
 				help();
 			}
-			tot_len += build_ip_packet(l3, &opt_value, 0);			
+			tot_len += build_ip_packet(l3, &opt_value);
 			break;
 		case ETH_P_ARP:
 			break;
 	}
-	
+
 	return tot_len;
 }
 
@@ -399,7 +400,7 @@ int main (int argc, char **argv)
 	/* check option & build packet */
 	len = build_raw_packet(&opt_value);
 
-	debug_out(DEBUG_LEVEL_DETAIL, "TX packet: %s.\n", bin_to_hex_string(MyPacket, len));
+	debug_out(DEBUG_LEVEL_DETAIL, "TX packet: %s.\n", bin_to_hex_string(MyPacket.data, len));
 	
 	fd = socket(PF_PACKET, SOCK_PACKET, htons(opt_value.l3proto));
 	if(fd < 0){
@@ -419,7 +420,7 @@ int main (int argc, char **argv)
 	while(nsend++ < count){
 		char rbuf[2048];
 
-		if(sendto(fd, MyPacket, len, 0, (struct sockaddr *)&si, sizeof(si) ) < 0){
+		if(sendto(fd, MyPacket.data, len, 0, (struct sockaddr *)&si, sizeof(si) ) < 0){
 			debug_out(DEBUG_LEVEL_ERROR, "sendto Packet failure (%m), index: %d\n", nsend);
 			continue;
 		}

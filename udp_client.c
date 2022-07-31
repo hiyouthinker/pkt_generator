@@ -125,7 +125,7 @@ int main (int argc, char **argv)
 		if (shost) {
 			si.sin_addr.s_addr = inet_addr(shost);
 		}
-		
+
 		if (bind(fd, (struct sockaddr *)&si, sizeof(si)) < 0) {
 			debug_out(DEBUG_LEVEL_ERROR, "bind: %s.\n", strerror(errno));
 			goto done;
@@ -140,7 +140,7 @@ int main (int argc, char **argv)
 	if (count == 1 && pf) {
 		count = 100;/* In order to ensure that the file transfer is completed */
 	}
-	
+
 	while (index++ < count) {
 		char buf[1024];
 

@@ -14,6 +14,7 @@
 #include <linux/icmp.h>
 #include <linux/igmp.h>
 #include <time.h>
+#include <assert.h>
 #include "libdebug.h"
 
 #define CSUM_MANGLED_0 ((__sum16)0xffff)
@@ -110,6 +111,11 @@ struct udphdr {
 #define TCPOLEN_MD5SIG         18
 #define TCPOLEN_EXP_FASTOPEN_BASE  4
 
+static int ip_hdrlen(const struct iphdr *iph)
+{
+	return iph->ihl * 4;
+}
+
 static int build_tcp_options(__be32 *p)
 {
 	*p++ = htonl((TCPOPT_MSS << 24) |
@@ -136,6 +142,7 @@ static int build_l4_packet(int proto, void *l4, void *param, struct iphdr *iph)
 	int l4_head_len, l4_data_len = 0;
 	char *l4_data;
 	__wsum wsum = 0;
+	struct opt_value_s *ov = param;
 
 	static unsigned int seq = 0x0000;
 	static unsigned int ack = 0x0000;
@@ -147,12 +154,10 @@ static int build_l4_packet(int proto, void *l4, void *param, struct iphdr *iph)
 
 	switch (proto) {
 	case IPPROTO_TCP: {	/* Build a SYN */
-		struct opt_value_s *ov = param;
-
 		l4_head_len = sizeof(*th);
 		th = l4;
-		th->source	= (ov && ov->sport) ? htons(ov->sport) : htons(sport++);
-		th->dest	= (ov && ov->dport) ? htons(ov->dport) : htons(dport);
+		th->source	= htons(ov->sport++);
+		th->dest	= htons(ov->dport);
 		th->seq		= htonl(seq++);
 		th->ack_seq	= htonl(ack);
 		th->window	= (ov && ov->window) ? htons(ov->window) : htons(65535);
@@ -164,16 +169,14 @@ static int build_l4_packet(int proto, void *l4, void *param, struct iphdr *iph)
 		th->syn = 1;
 		th->check = tcp_v4_check(l4_head_len + l4_data_len, iph->saddr, iph->daddr,
 						 csum_partial(th, th->doff << 2, wsum));
-		iph->tot_len = htons(sizeof(struct iphdr) + l4_head_len + l4_data_len);
 		break;
 	}
 	case IPPROTO_UDP: {
 		l4_head_len = sizeof(*uh);
-		l4_data_len = udp_size;
-		iph->tot_len = htons(sizeof(struct iphdr) + l4_head_len + l4_data_len);
+		l4_data_len = ov->udp_size;
 		uh = l4;
-		uh->source 	= htons(sport++);
-		uh->dest 	= htons(dport);
+		uh->source 	= htons(ov->sport++);
+		uh->dest 	= htons(ov->dport);
 		uh->len 	= htons(l4_head_len + l4_data_len);
 		uh->check 	= 0;
 		if(l4_data_len){
@@ -204,12 +207,8 @@ static int build_udp_packet(void *l4, void *param, struct iphdr *iph)
 	return build_l4_packet(IPPROTO_UDP, l4, param, iph);
 }
 
-int build_ip_packet(void *l3, void *param, __u8 proto)
+static void build_ip_header(struct iphdr *iph, struct opt_value_s *ov)
 {
-	int len = 0;
-	struct iphdr *iph = l3;
-	struct opt_value_s *ov = param;
-
 	srandom(time(NULL));
 
 	iph->version = 4;
@@ -218,36 +217,92 @@ int build_ip_packet(void *l3, void *param, __u8 proto)
 	iph->frag_off = 0;
 	iph->ttl = 64;
 	iph->check = 0;
+	iph->protocol = ov->l4proto;
+	iph->saddr = ov->saddr;
+	iph->daddr = ov->daddr;
+}
 
-	if (ov) {
-		iph->protocol = ov->l4proto;
-		iph->saddr = ov->saddr;
-		iph->daddr = ov->daddr;
-		proto = ov->l4proto;
+int build_ip_packet(struct packet_st *pkt, void *param)
+{
+	int mtu;
+	char l4[MAX_PKT_LEN];
+	int l3_data_len = 0;
+	char ipheader[60];
+	struct iphdr *iph = (struct iphdr *)ipheader;
+	struct opt_value_s *ov = param;
+
+	mtu = ov->mtu ?: DEFAULT_MTU;
+
+	build_ip_header(iph, ov);
+
+	switch (ov->l4proto) {
+	case IPPROTO_TCP:
+		l3_data_len = build_tcp_packet(l4, param, iph);
+		break;
+	case IPPROTO_UDP:
+		l3_data_len = build_udp_packet(l4, param, iph);
+		break;
+	case IPPROTO_ICMP:
+		break;
+	case IPPROTO_IGMP:
+		break;
+	}
+
+	if (l3_data_len + ip_hdrlen(iph) <= mtu) {
+		memcpy(pkt->data, (char *)iph, ip_hdrlen(iph));
+		memcpy(pkt->data + ip_hdrlen(iph), l4, l3_data_len);
+		pkt->len = ip_hdrlen(iph) + l3_data_len;
 	} else {
-		iph->protocol = proto;
-		if (local_ip)
-			iph->saddr = inet_addr(local_ip);
-		else
-			iph->saddr = (unsigned int)random();
+		char *pl4 = l4;
+		struct packet_st *current = pkt, *prev;
+		char data[2048], *pdata = data;
+		int max = mtu - ip_hdrlen(iph);/* Maximum IP Data Length */
+		int len = max & ~7;
+		int offset = 0;
+		int remain = l3_data_len;
+
+		while (1) {
+			/* offset MUST be 8 multiple */
+			iph->frag_off = htons(offset >> 3);
+
+			if (remain <= max) {
+				memcpy(current->data, (char *)iph, ip_hdrlen(iph));
+				memcpy(current->data + ip_hdrlen(iph), pl4, remain);
+				current->len = ip_hdrlen(iph) + remain;
+				break;
+			} else {
+				iph->frag_off |= htons(IP_MF);
+			}
+
+			offset += len;
+			remain -= len;
+
+			/* IP Header */
+			memcpy(current->data, (char *)iph, ip_hdrlen(iph));
+			/*
+			 * First Packet: TCP Header + Data
+			 * Other Packet: TCP Data
+			 */
+			memcpy(current->data + ip_hdrlen(iph), pl4, len);
+
+			current->len = len + ip_hdrlen(iph);
+			pl4 += len;
+			prev = current;
+
+			current = malloc(sizeof(struct packet_st));
+			assert(current);
+			memset(current, 0, sizeof(current));
+
+			prev->next = current;
+		}
 	}
 
-	switch (proto) {
-		case IPPROTO_TCP:
-			len = build_tcp_packet(l3 + iph->ihl * 4, param, iph);
-			break;
-		case IPPROTO_UDP:
-			len = build_udp_packet(l3 + iph->ihl * 4, NULL, iph);
-			break;
-		case IPPROTO_ICMP:
-			
-			break;
-		case IPPROTO_IGMP:
-			
-			break;
-	}
-	iph->check = checksum1(iph, iph->ihl * 4);
-	return len + iph->ihl * 4;
+#if 0 /*  Kernel fills in when IP_HDRINCL is set */
+	iph->tot_len = htons(sizeof(struct iphdr)) + len;
+	iph->check = checksum1(iph, ip_hdrlen(iph));
+#endif
+
+	return ip_hdrlen(iph) + l3_data_len;
 }
 
 int is_tcpudp_packet(char *packet, int proto)
@@ -262,7 +317,7 @@ int is_tcpudp_packet(char *packet, int proto)
 unsigned short tcpudp_packet_port(char *packet, int dir)
 {
 	struct iphdr *iph = (struct iphdr*)packet;
-	struct tcphdr *th = (struct tcphdr *)(packet + iph->ihl * 4);
+	struct tcphdr *th = (struct tcphdr *)(packet + ip_hdrlen(iph));
 
 	/* struct tcphdr & struct udphdr is same in the first 4 bytes*/
 	if(dir)
