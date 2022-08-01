@@ -33,7 +33,7 @@ static void help(char *cmd)
 	printf("\t-l %-20ssrc ip\n", "<LOCAL>");
 	printf("\t-D %-20sdst port\n", "<PORT>");
 	printf("\t-s %-20ssleep time\n", "<NUMBER>");
-	printf("\t-z %-20sUDP data length (0 =< SIZE <= 1500)\n", "<NUMBER>");
+	printf("\t-z %-20sl4 payload length (0 =< SIZE <= 1500)\n", "<NUMBER>");
 	printf("\t-p %-20sl4 protocol\n", "<NUMBER>");
 	printf("\t-c %-20scount\n", "<COUNT>");
 	printf("\t-m %-20smtu settings (default is 1500)\n", "<NUMBER>");
@@ -73,7 +73,7 @@ int main (int argc, char **argv)
 			sleep_time = atoi(optarg);
 			break;
 		case 'z':
-			udp_size = atoi(optarg);
+			ov.payload_size = atoi(optarg);
 			break;
 		case 'p':
 			proto = atoi(optarg);
@@ -157,7 +157,6 @@ int main (int argc, char **argv)
 	ov.l4proto = proto;
 	ov.sport = sport;
 	ov.dport = dport;
-	ov.udp_size = udp_size;
 
 	if(count > 64){
 		ptx = (struct timeval *)malloc(count * sizeof(struct timeval));
@@ -180,16 +179,16 @@ int main (int argc, char **argv)
 
 		do {
 			if(sendto(fd, pkt->data, pkt->len, 0,(struct sockaddr *)&si, sizeof(si) ) < 0){
-				debug_out(DEBUG_LEVEL_ERROR, "TX Packet (to %s): failure (%s), index: %d\n"
-					, host, strerror(errno), nsend);
-				debug_out(DEBUG_LEVEL_DETAIL, "Packet(%d):\n	%s\n"
-					, pkt->len, bin_to_hex_string(pkt->data, pkt->len));
+				debug_out(DEBUG_LEVEL_ERROR, "TX Packet (to %s): failure (%s), index: %d\n",
+					host, strerror(errno), nsend);
+				debug_out(DEBUG_LEVEL_DETAIL, "Packet(%d):\n	%s\n",
+					pkt->len, bin_to_hex_string(pkt->data, pkt->len));
 				exit(1);
 			}
 
 			debug_out(DEBUG_LEVEL_DETAIL, "TX Packet (to %s): success, index: %d\n", host, nsend);
-			debug_out(DEBUG_LEVEL_DETAIL, "Packet(%d):\n	%s\n"
-				, pkt->len, bin_to_hex_string(pkt->data, pkt->len));
+			debug_out(DEBUG_LEVEL_DETAIL, "Packet(%d):\n	%s\n",
+				pkt->len, bin_to_hex_string(pkt->data, pkt->len));
 			pkt = pkt->next;
 		} while(pkt);
 
@@ -207,8 +206,8 @@ rerecv:
 			}
 
 			if(tcpudp_packet_port(recv_buf, 1) != (ov.sport - 1)) {
-				debug_out(DEBUG_LEVEL_ERROR, "RX Packet (from %s): failure, dest port: %d\n"
-					, ip_packet_address(recv_buf, 0), tcpudp_packet_port(recv_buf, 1));
+				debug_out(DEBUG_LEVEL_ERROR, "RX Packet (from %s): failure, dest port: %d\n",
+					ip_packet_address(recv_buf, 0), tcpudp_packet_port(recv_buf, 1));
 				goto rerecv;
 			}
 
@@ -220,14 +219,14 @@ rerecv:
 	debug_out(DEBUG_LEVEL_NONE, "Statistic:\n");
 	debug_out(DEBUG_LEVEL_NONE, "\t%-24s: %s\n", "Protocol", proto==IPPROTO_TCP ? "TCP" : "UDP");
 	debug_out(DEBUG_LEVEL_NONE, "\t%-24s: %lu seconds, %lu microseconds\n", "Start Time", stv.tv_sec, stv.tv_usec);
-	debug_out(DEBUG_LEVEL_NONE, "\t%-24s: %lu seconds, %lu microseconds.\n"
-		, "Total elapsed time", ptx[count - 1].tv_sec - stv.tv_sec, ptx[count - 1].tv_usec - stv.tv_usec);
+	debug_out(DEBUG_LEVEL_NONE, "\t%-24s: %lu seconds, %lu microseconds.\n",
+		"Total elapsed time", ptx[count - 1].tv_sec - stv.tv_sec, ptx[count - 1].tv_usec - stv.tv_usec);
 	debug_out(DEBUG_LEVEL_NONE, "\t%-24s: %d\n", "TX Packet Num", count);
 	debug_out(DEBUG_LEVEL_NONE, "\t%-24s: %d (length of l3 header and l3 data)\n", "Size of TX Packet", l3_len);
 
 	for(nsend = 0; nsend < count; nsend++){
-		debug_out(DEBUG_LEVEL_DETAIL, "TX Packet %04d: seconds: %lu, microseconds: %lu\n"
-			, nsend, ptx[nsend].tv_sec, ptx[nsend].tv_usec);
+		debug_out(DEBUG_LEVEL_DETAIL, "TX Packet %04d: seconds: %lu, microseconds: %lu\n",
+			nsend, ptx[nsend].tv_sec, ptx[nsend].tv_usec);
 	}
 	if(tx_time != ptx){
 		free(ptx);

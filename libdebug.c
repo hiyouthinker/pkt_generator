@@ -21,7 +21,7 @@
 
 char cmd_and_param[256];
 int debug_switch = 0;
-int udp_size = 0;
+int payload_size = 0;
 unsigned short sport = 20000;
 unsigned short dport = 80;
 
@@ -155,6 +155,8 @@ static int build_l4_packet(int proto, void *l4, void *param, struct iphdr *iph)
 	switch (proto) {
 	case IPPROTO_TCP: {	/* Build a SYN */
 		l4_head_len = sizeof(*th);
+		l4_data_len = ov->payload_size;
+
 		th = l4;
 		th->source	= htons(ov->sport++);
 		th->dest	= htons(ov->dport);
@@ -176,7 +178,8 @@ static int build_l4_packet(int proto, void *l4, void *param, struct iphdr *iph)
 	}
 	case IPPROTO_UDP: {
 		l4_head_len = sizeof(*uh);
-		l4_data_len = ov->udp_size;
+		l4_data_len = ov->payload_size;
+
 		uh = l4;
 		uh->source 	= htons(ov->sport++);
 		uh->dest 	= htons(ov->dport);

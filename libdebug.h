@@ -51,7 +51,7 @@ struct opt_value_s{
 	__u8 pcode;		/* Code of PPPoE */
 	__u8 psid;		/* SessionID of PPPoE */
 	__u16 window;	/* for TCP */
-	__u16 udp_size;
+	__u16 payload_size; /* L4 Payload Length */
 	__u16 mtu;
 	__u16 mss;
 };
@@ -86,7 +86,6 @@ enum{
 
 extern char cmd_and_param[256];
 extern int debug_switch;
-extern int udp_size;
 extern unsigned short sport;
 extern unsigned short dport;
 extern char *local_ip;
