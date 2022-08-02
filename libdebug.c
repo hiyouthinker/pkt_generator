@@ -22,7 +22,6 @@
 char cmd_and_param[256];
 int debug_switch = 0;
 int payload_size = 0;
-unsigned short sport = 20000;
 unsigned short dport = 80;
 
 char *local_ip = "192.168.1.1";

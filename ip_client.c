@@ -32,6 +32,7 @@ static void help(char *cmd)
 	printf("\t-H %-20sdst ip\n", "<HOST>");
 	printf("\t-l %-20ssrc ip\n", "<LOCAL>");
 	printf("\t-D %-20sdst port\n", "<PORT>");
+	printf("\t-S %-20ssrc port\n", "<PORT>");
 	printf("\t-s %-20ssleep time\n", "<NUMBER>");
 	printf("\t-z %-20sl4 payload length (0 =< SIZE <= 1500)\n", "<NUMBER>");
 	printf("\t-p %-20sl4 protocol\n", "<NUMBER>");
@@ -54,7 +55,7 @@ int main (int argc, char **argv)
 	int opt, val = 1, count = 1, nsend = 0, proto = IPPROTO_TCP;
 	struct opt_value_s ov = {};
 
-	while ((opt = getopt(argc, argv, "H:l:D:s:z:p:c:m:M:rdh")) != -1) {
+	while ((opt = getopt(argc, argv, "H:l:D:S:s:z:p:c:m:M:rdh")) != -1) {
 		switch (opt) {
 		case 'H':
 			host = optarg;
@@ -67,7 +68,10 @@ int main (int argc, char **argv)
 			ov.saddr = si.sin_addr.s_addr;
 			break;
 		case 'D':
-			dport = atoi(optarg);
+			ov.dport = atoi(optarg);
+			break;
+		case 'S':
+			ov.sport = atoi(optarg);
 			break;
 		case 's':
 			sleep_time = atoi(optarg);
@@ -148,15 +152,21 @@ int main (int argc, char **argv)
 		help(argv[0]);
 	}
 
-	if (!ov.saddr) {
-		srandom(time(NULL));
-		ov.saddr = (unsigned int)random();
-	}
-
 	ov.daddr = si.sin_addr.s_addr;
 	ov.l4proto = proto;
-	ov.sport = sport;
-	ov.dport = dport;
+
+	if (!ov.saddr || !ov.sport || !ov.dport) {
+		srandom(time(NULL));
+
+		if (!ov.saddr)
+			ov.saddr = (unsigned int)random();
+
+		if (!ov.sport)
+			ov.sport = 0xffff & random();
+
+		if (!ov.dport)
+			ov.dport = dport;
+	}
 
 	if(count > 64){
 		ptx = (struct timeval *)malloc(count * sizeof(struct timeval));
